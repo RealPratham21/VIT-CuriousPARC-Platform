@@ -1,0 +1,331 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+@custom-variant dark (&:is(.dark *));
+
+/* ORBIT - Refined Light Design System
+   Principles: Anti-chunkiness, monochromatic base, single accent, spatial hierarchy
+*/
+:root {
+  /* Base - Ultra clean whites and soft grays */
+  --background: #FAFBFC;
+  --foreground: #0F172A;
+  --card: #FFFFFF;
+  --card-foreground: #0F172A;
+  --popover: #FFFFFF;
+  --popover-foreground: #0F172A;
+  
+  /* Primary - Single high-vibrancy accent */
+  --primary: #0066FF;
+  --primary-foreground: #FFFFFF;
+  
+  /* Secondary - Subtle, recedes into background */
+  --secondary: #F1F5F9;
+  --secondary-foreground: #475569;
+  
+  /* Muted - For metadata and low-priority elements */
+  --muted: #F8FAFC;
+  --muted-foreground: #64748B;
+  
+  /* Accent - Soft blue for highlights */
+  --accent: #EFF6FF;
+  --accent-foreground: #0066FF;
+  
+  /* Destructive */
+  --destructive: #EF4444;
+  --destructive-foreground: #FFFFFF;
+  
+  /* Borders - Ultra subtle, almost invisible */
+  --border: rgba(15, 23, 42, 0.06);
+  --input: rgba(15, 23, 42, 0.08);
+  --ring: #0066FF;
+  
+  /* Life-Signal Colors - Muted but clear */
+  --success: #22C55E;
+  --warning: #F59E0B;
+  --critical: #EF4444;
+  --neutral: #94A3B8;
+  
+  /* Chart colors */
+  --chart-1: #0066FF;
+  --chart-2: #22C55E;
+  --chart-3: #F59E0B;
+  --chart-4: #EF4444;
+  --chart-5: #94A3B8;
+  
+  /* Radius - Sharper, architectural feel */
+  --radius: 6px;
+  
+  /* Sidebar */
+  --sidebar: #FFFFFF;
+  --sidebar-foreground: #0F172A;
+  --sidebar-primary: #0066FF;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #EFF6FF;
+  --sidebar-accent-foreground: #0066FF;
+  --sidebar-border: rgba(15, 23, 42, 0.04);
+  --sidebar-ring: #0066FF;
+}
+
+.dark {
+  --background: #020202;
+  --foreground: #F8FAFC;
+  --card: #0A0A0A;
+  --card-foreground: #F8FAFC;
+  --popover: #0A0A0A;
+  --popover-foreground: #F8FAFC;
+  --primary: #0066FF;
+  --primary-foreground: #FFFFFF;
+  --secondary: #1E1E1E;
+  --secondary-foreground: #CBD5E1;
+  --muted: #141414;
+  --muted-foreground: #64748B;
+  --accent: #0A1628;
+  --accent-foreground: #60A5FA;
+  --destructive: #EF4444;
+  --destructive-foreground: #FFFFFF;
+  --border: rgba(255, 255, 255, 0.06);
+  --input: rgba(255, 255, 255, 0.08);
+  --ring: #0066FF;
+  --chart-1: #0066FF;
+  --chart-2: #22C55E;
+  --chart-3: #F59E0B;
+  --chart-4: #EF4444;
+  --chart-5: #64748B;
+  --sidebar: #0A0A0A;
+  --sidebar-foreground: #F8FAFC;
+  --sidebar-primary: #0066FF;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #0A1628;
+  --sidebar-accent-foreground: #60A5FA;
+  --sidebar-border: rgba(255, 255, 255, 0.04);
+  --sidebar-ring: #0066FF;
+}
+
+@theme inline {
+  --font-sans: 'Geist', 'Geist Fallback';
+  --font-mono: 'Geist Mono', 'Geist Mono Fallback';
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --radius-sm: calc(var(--radius) - 2px);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 2px);
+  --radius-xl: calc(var(--radius) + 6px);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  
+  /* Life-Signal Colors */
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-critical: var(--critical);
+  --color-neutral: var(--neutral);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+  
+  /* Typographic scale - Minor Third */
+  h1 {
+    @apply text-2xl font-semibold tracking-tight;
+    letter-spacing: -0.025em;
+  }
+  h2 {
+    @apply text-xl font-semibold tracking-tight;
+    letter-spacing: -0.02em;
+  }
+  h3 {
+    @apply text-base font-medium;
+    letter-spacing: -0.01em;
+  }
+  
+  /* Metadata styling - pushed to background */
+  .text-meta {
+    @apply text-xs text-muted-foreground;
+    opacity: 0.7;
+  }
+}
+
+/* ORBIT Refined Utilities */
+@layer utilities {
+  /* Clean card - no border, subtle shadow only */
+  .card-clean {
+    background: var(--card);
+    border-radius: var(--radius);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03), 0 1px 3px rgba(0, 0, 0, 0.02);
+  }
+  
+  /* Card with minimal border - for when separation is needed */
+  .card-bordered {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+  }
+  
+  /* Elevated surface - for modals, popovers */
+  .surface-elevated {
+    background: var(--popover);
+    border-radius: var(--radius);
+    box-shadow: 
+      0 4px 6px -1px rgba(0, 0, 0, 0.05),
+      0 2px 4px -2px rgba(0, 0, 0, 0.03),
+      0 0 0 1px rgba(0, 0, 0, 0.03);
+  }
+  
+  /* Tracking tight for UI headings */
+  .tracking-tight-ui {
+    letter-spacing: -0.025em;
+  }
+  
+  /* Health indicators - refined, no glow */
+  .health-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+  }
+  
+  .health-success { background: var(--success); }
+  .health-warning { background: var(--warning); }
+  .health-critical { background: var(--critical); }
+  .health-neutral { background: var(--neutral); }
+  
+  /* Status badges - ultra minimal */
+  .badge-success {
+    background: rgba(34, 197, 94, 0.08);
+    color: #16A34A;
+  }
+  
+  .badge-warning {
+    background: rgba(245, 158, 11, 0.08);
+    color: #D97706;
+  }
+  
+  .badge-critical {
+    background: rgba(239, 68, 68, 0.08);
+    color: #DC2626;
+  }
+  
+  .badge-info {
+    background: rgba(0, 102, 255, 0.06);
+    color: #0066FF;
+  }
+  
+  .badge-neutral {
+    background: rgba(100, 116, 139, 0.08);
+    color: #475569;
+  }
+  
+  /* Legacy support */
+  .card-surface {
+    background: var(--card);
+    border-radius: var(--radius);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+  }
+}
+
+/* Scrollbar - ultra minimal */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.08);
+  border-radius: 2px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.12);
+}
+
+/* Micro-interactions - refined */
+button, 
+[role="button"] {
+  transition: all 120ms ease-out;
+}
+
+button:active:not(:disabled),
+[role="button"]:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* At-risk subtle pulse */
+@keyframes pulse-subtle {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.pulse-risk {
+  animation: pulse-subtle 2.5s ease-in-out infinite;
+}
+
+/* Shimmer for loading */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(0, 0, 0, 0.02) 0%,
+    rgba(0, 0, 0, 0.04) 50%,
+    rgba(0, 0, 0, 0.02) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+/* Chart line animation */
+@keyframes draw-line {
+  from { stroke-dashoffset: 1; }
+  to { stroke-dashoffset: 0; }
+}
+
+.animate-draw {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: draw-line 1.5s ease-out forwards;
+}
