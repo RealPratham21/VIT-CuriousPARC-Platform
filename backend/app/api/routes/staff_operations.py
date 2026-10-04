@@ -264,12 +264,25 @@ async def transition_round(
     allowed = {
         RoundStatus.SCHEDULED: {RoundStatus.LIVE},
         RoundStatus.LIVE: {RoundStatus.CLOSED},
-        RoundStatus.CLOSED: set(),
+        RoundStatus.CLOSED: {RoundStatus.LIVE},
     }
     if target not in allowed[record.status]:
         raise conflict(
             "INVALID_ROUND_TRANSITION", f"Cannot change {record.status.value} to {target.value}."
         )
+    if target == RoundStatus.LIVE:
+        other = await session.scalar(
+            select(Round).where(
+                Round.event_id == event_id,
+                Round.status == RoundStatus.LIVE,
+                Round.id != record.id,
+            )
+        )
+        if other is not None:
+            raise conflict(
+                "ROUND_ALREADY_LIVE",
+                f"Close {other.name} before opening this round.",
+            )
     before = record.status
     record.status = target
     add_activity(

@@ -198,14 +198,14 @@ export function EvaluationsBoard() {
                   {round.status === "live" ? "Live" : round.status === "closed" ? "Closed" : "Scheduled"}
                 </Badge>
               ) : null}
-              {canControl && round?.status === "scheduled" ? (
+              {canControl && round && round.status !== "live" ? (
                 <Button
                   size="sm"
                   disabled={pending !== null}
                   onClick={() => void run("activate", () => activateRound(eventId!, round.id))}
                 >
                   {pending === "activate" ? <Loader2 data-icon="inline-start" className="animate-spin" /> : null}
-                  Make round live
+                  {round.status === "closed" ? "Reopen round" : "Make round live"}
                 </Button>
               ) : null}
               {canControl && round?.status === "live" ? (
@@ -311,7 +311,7 @@ export function EvaluationsBoard() {
             <DialogHeader>
               <DialogTitle>Close {round.name}?</DialogTitle>
               <DialogDescription>
-                Scheduling and evaluation updates stop when the round is closed. This cannot be reopened.
+                Scheduling and evaluation updates pause while the round is closed. A lead can open it again.
               </DialogDescription>
             </DialogHeader>
             <DialogFooter>
