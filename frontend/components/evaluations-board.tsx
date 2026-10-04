@@ -26,6 +26,7 @@ import {
 } from "@/lib/evaluations"
 import {
   canControlRound,
+  comparePanelNames,
   evaluationTone,
   eventIdForUser,
   listPanels,
@@ -146,7 +147,7 @@ export function EvaluationsBoard() {
     rows.push(item)
     panelGroups.set(item.panel.name, rows)
   }
-  const panelNames = [...panelGroups.keys()].sort((left, right) => left.localeCompare(right))
+  const panelNames = [...panelGroups.keys()].sort(comparePanelNames)
 
   function count(status: EvaluationStatus) {
     return evaluations.filter((item) => item.status === status).length

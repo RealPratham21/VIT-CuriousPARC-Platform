@@ -18,6 +18,7 @@ import {
   canCheckInTeam,
   canRegisterTeam,
   canUpdateEvaluation,
+  comparePanelNames,
   checkInMember,
   currentRound,
   listPanels,
@@ -101,7 +102,7 @@ export function TeamOfficialControls({
       listPanels(eventId)
         .then((result) => {
           if (!active) return
-          const activePanels = result.filter((panel) => panel.is_active).sort((left, right) => left.name.localeCompare(right.name))
+          const activePanels = result.filter((panel) => panel.is_active).sort((left, right) => comparePanelNames(left.name, right.name))
           setPanels(activePanels)
           setPanelId((current) => current || activePanels[0]?.id || "")
         })
