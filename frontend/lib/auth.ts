@@ -29,7 +29,7 @@ export type AuthSession = {
   user: StaffUser
 }
 
-const EVENT_SLUG = "curiousparc-2026"
+export const EVENT_SLUG = "curiousparc-2026"
 
 const ROLE_LABELS: Record<StaffRole, string> = {
   viewer: "Viewer",
