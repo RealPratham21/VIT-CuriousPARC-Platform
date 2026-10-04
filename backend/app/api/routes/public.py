@@ -31,6 +31,7 @@ from app.schemas.contracts import (
     EventPublic,
     OfficialPublic,
     Page,
+    RoomAssigneePublic,
     RoomDetailPublic,
     RoomRef,
     RoomSummaryPublic,
@@ -174,17 +175,19 @@ async def officials_for_event(session: AsyncSession, event: Event) -> list[Offic
             .join(Room, Room.id == RoomStaffAssignment.room_id)
             .where(
                 Room.event_id == event.id,
+                RoomStaffAssignment.user_id.is_not(None),
+                RoomStaffAssignment.duty_role == RoomDutyRole.COORDINATOR,
                 RoomStaffAssignment.starts_at <= now,
                 or_(RoomStaffAssignment.ends_at.is_(None), RoomStaffAssignment.ends_at > now),
             )
         )
     ).all()
-    room_map: dict[UUID, list[RoomRef]] = {}
+    room_map: dict[UUID, dict[UUID, RoomRef]] = {}
     for user_id, room in assignment_rows:
-        room_map.setdefault(user_id, []).append(RoomRef.model_validate(room))
+        room_map.setdefault(user_id, {})[room.id] = RoomRef.model_validate(room)
     results = []
     for user_id, (user, roles) in grouped.items():
-        rooms = room_map.get(user_id, [])
+        rooms = list(room_map.get(user_id, {}).values())
         managed = 0
         if rooms:
             managed = (
@@ -234,16 +237,18 @@ async def build_room_summaries(
         if item.room:
             by_room.setdefault(item.room.id, []).append(item)
     officials = await officials_for_event(session, event)
-    volunteer_by_room: dict[UUID, OfficialPublic] = {}
-    coordinator_by_room: dict[UUID, OfficialPublic] = {}
+    volunteers_by_room: dict[UUID, list[RoomAssigneePublic]] = {}
+    coordinators_by_room: dict[UUID, list[RoomAssigneePublic]] = {}
     now = datetime.now(UTC)
     duty_rows = (
         (
             await session.execute(
                 select(
+                    RoomStaffAssignment.id,
                     RoomStaffAssignment.room_id,
                     RoomStaffAssignment.user_id,
                     RoomStaffAssignment.duty_role,
+                    RoomStaffAssignment.volunteer_name,
                 ).where(
                     RoomStaffAssignment.room_id.in_([room.id for room in rooms]),
                     RoomStaffAssignment.starts_at <= now,
@@ -255,17 +260,31 @@ async def build_room_summaries(
         else []
     )
     official_map = {official.id: official for official in officials}
-    for room_id, user_id, duty in duty_rows:
-        official = official_map.get(user_id)
-        if official and duty == RoomDutyRole.VOLUNTEER:
-            volunteer_by_room[room_id] = official
-        elif official:
-            coordinator_by_room[room_id] = official
+    for assignment_id, room_id, user_id, duty, volunteer_name in duty_rows:
+        if duty == RoomDutyRole.VOLUNTEER:
+            if not volunteer_name:
+                continue
+            volunteers_by_room.setdefault(room_id, []).append(
+                RoomAssigneePublic(id=assignment_id, full_name=volunteer_name)
+            )
+            continue
+        official = official_map.get(user_id) if user_id else None
+        if official is None:
+            continue
+        assigned = coordinators_by_room.setdefault(room_id, [])
+        if all(person.user_id != official.id for person in assigned):
+            assigned.append(
+                RoomAssigneePublic(
+                    id=assignment_id,
+                    full_name=official.full_name,
+                    user_id=official.id,
+                )
+            )
     results = []
     for room in rooms:
         allocated = by_room.get(room.id, [])
-        volunteer = volunteer_by_room.get(room.id)
-        coordinator = coordinator_by_room.get(room.id)
+        volunteers = volunteers_by_room.get(room.id, [])
+        coordinators = coordinators_by_room.get(room.id, [])
         results.append(
             RoomSummaryPublic(
                 id=room.id,
@@ -274,9 +293,9 @@ async def build_room_summaries(
                 capacity=room.capacity,
                 allocated_teams=len(allocated),
                 checked_in_teams=sum(item.attendance.status == "checked_in" for item in allocated),
-                volunteer=volunteer,
-                coordinator=coordinator,
-                coverage="covered" if volunteer and coordinator else "needs_attention",
+                volunteers=volunteers,
+                coordinators=coordinators,
+                coverage="covered" if volunteers and coordinators else "needs_attention",
             )
         )
     return results

@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Request
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import current_user, db_session, require_event_role
@@ -13,6 +13,7 @@ from app.models.activity import Announcement
 from app.models.enums import (
     ActivityVisibility,
     EvaluationStatus,
+    RoomDutyRole,
     RoundStatus,
     StaffRole,
 )
@@ -28,12 +29,14 @@ from app.schemas.contracts import (
     EvaluationCreate,
     EvaluationStaff,
     EvaluationTransition,
+    MessageResponse,
     PanelCreate,
     PanelMemberCreate,
     PanelMemberView,
     PanelView,
     RoomStaffAssignmentCreate,
     RoomStaffAssignmentView,
+    RoomStaffRelease,
     RoundCreate,
     RoundPublic,
 )
@@ -100,36 +103,52 @@ async def assign_room_staff(
 ) -> RoomStaffAssignmentView:
     await require_event_role(session, user, event_id, COORDINATORS)
     room = await session.scalar(select(Room).where(Room.id == room_id, Room.event_id == event_id))
-    assignee = await session.get(StaffUser, payload.user_id)
     if room is None:
         raise not_found("Room")
-    if assignee is None or not assignee.is_active:
-        raise not_found("Active staff user")
-    assignee_role = await session.scalar(
-        select(EventStaffRole.id).where(
-            EventStaffRole.event_id == event_id,
-            EventStaffRole.user_id == assignee.id,
-        )
-    )
-    if assignee_role is None:
-        raise conflict(
-            "EVENT_ROLE_REQUIRED",
-            "Assign this staff user an event role before assigning room duty.",
-        )
-    current = await session.scalar(
-        select(RoomStaffAssignment).where(
-            RoomStaffAssignment.user_id == payload.user_id,
-            RoomStaffAssignment.duty_role == payload.duty_role,
-            RoomStaffAssignment.ends_at.is_(None),
-        )
-    )
-    if current:
-        if payload.starts_at <= current.starts_at:
-            raise conflict(
-                "INVALID_ASSIGNMENT_TIME",
-                "The new assignment must start after the current assignment started.",
+    if payload.duty_role == RoomDutyRole.COORDINATOR:
+        assignee = await session.get(StaffUser, payload.user_id)
+        if assignee is None or not assignee.is_active:
+            raise not_found("Active staff user")
+        assignee_role = await session.scalar(
+            select(EventStaffRole.id).where(
+                EventStaffRole.event_id == event_id,
+                EventStaffRole.user_id == assignee.id,
             )
-        current.ends_at = payload.starts_at
+        )
+        if assignee_role is None:
+            raise conflict(
+                "EVENT_ROLE_REQUIRED",
+                "Assign this staff user an event role before assigning room duty.",
+            )
+        current = await session.scalar(
+            select(RoomStaffAssignment).where(
+                RoomStaffAssignment.user_id == payload.user_id,
+                RoomStaffAssignment.duty_role == payload.duty_role,
+                RoomStaffAssignment.ends_at.is_(None),
+            )
+        )
+        if current:
+            if payload.starts_at <= current.starts_at:
+                raise conflict(
+                    "INVALID_ASSIGNMENT_TIME",
+                    "The new assignment must start after the current assignment started.",
+                )
+            current.ends_at = payload.starts_at
+    else:
+        volunteer_name = payload.volunteer_name or ""
+        duplicate = await session.scalar(
+            select(RoomStaffAssignment.id).where(
+                RoomStaffAssignment.room_id == room.id,
+                RoomStaffAssignment.duty_role == RoomDutyRole.VOLUNTEER,
+                RoomStaffAssignment.ends_at.is_(None),
+                func.lower(RoomStaffAssignment.volunteer_name) == volunteer_name.lower(),
+            )
+        )
+        if duplicate is not None:
+            raise conflict(
+                "DUPLICATE_VOLUNTEER",
+                "That volunteer is already assigned to this room.",
+            )
     assignment = RoomStaffAssignment(
         room_id=room.id,
         assigned_by=user.id,
@@ -147,12 +166,58 @@ async def assign_room_staff(
         entity_id=assignment.id,
         after={
             "room_id": str(room.id),
-            "user_id": str(payload.user_id),
+            "user_id": str(payload.user_id) if payload.user_id else None,
+            "volunteer_name": payload.volunteer_name,
             "duty": payload.duty_role.value,
         },
     )
     await session.commit()
     return RoomStaffAssignmentView.model_validate(assignment)
+
+
+@router.post(
+    "/events/{event_id}/rooms/{room_id}/staff-assignments/release",
+    response_model=MessageResponse,
+)
+async def release_room_staff(
+    event_id: UUID,
+    room_id: UUID,
+    payload: RoomStaffRelease,
+    request: Request,
+    user: StaffUser = Depends(current_user),
+    session: AsyncSession = Depends(db_session),
+) -> MessageResponse:
+    await require_event_role(session, user, event_id, COORDINATORS)
+    current = await session.scalar(
+        select(RoomStaffAssignment)
+        .join(Room, Room.id == RoomStaffAssignment.room_id)
+        .where(
+            RoomStaffAssignment.id == payload.assignment_id,
+            Room.id == room_id,
+            Room.event_id == event_id,
+            RoomStaffAssignment.ends_at.is_(None),
+        )
+    )
+    if current is None:
+        raise not_found("Current room assignment")
+    current.ends_at = datetime.now(UTC)
+    add_audit(
+        session,
+        request,
+        event_id=event_id,
+        actor_user_id=user.id,
+        action="room_staff.release",
+        entity_type="room_staff_assignment",
+        entity_id=current.id,
+        after={
+            "room_id": str(room_id),
+            "user_id": str(current.user_id) if current.user_id else None,
+            "volunteer_name": current.volunteer_name,
+            "duty": current.duty_role.value,
+        },
+    )
+    await session.commit()
+    return MessageResponse(message="Room assignment ended.")
 
 
 @router.post("/events/{event_id}/rounds", response_model=RoundPublic, status_code=201)

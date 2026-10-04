@@ -162,6 +162,10 @@ export function canRegisterTeam(user: StaffUser | null) {
   return hasEventRole(user, WRITER_ROLES)
 }
 
+export function canAssignRoom(user: StaffUser | null) {
+  return hasEventRole(user, WRITER_ROLES)
+}
+
 export function canCheckInTeam(user: StaffUser | null) {
   return hasEventRole(user, CHECKIN_ROLES)
 }
@@ -252,7 +256,7 @@ async function staffSend(path: string, init: RequestInit) {
   return response
 }
 
-async function staffRequest<T>(path: string, init: RequestInit, fallback: string) {
+export async function staffRequest<T>(path: string, init: RequestInit, fallback: string) {
   let response: Response
   try {
     response = await staffSend(path, init)

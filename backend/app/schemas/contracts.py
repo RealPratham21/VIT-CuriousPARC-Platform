@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.models.enums import (
     AnnouncementAudience,
@@ -107,6 +107,12 @@ class OfficialPublic(APIModel):
     managed_team_count: int
 
 
+class RoomAssigneePublic(APIModel):
+    id: UUID
+    full_name: str
+    user_id: UUID | None = None
+
+
 class RoomSummaryPublic(APIModel):
     id: UUID
     code: str
@@ -114,8 +120,8 @@ class RoomSummaryPublic(APIModel):
     capacity: int | None
     allocated_teams: int
     checked_in_teams: int
-    volunteer: OfficialPublic | None
-    coordinator: OfficialPublic | None
+    volunteers: list[RoomAssigneePublic]
+    coordinators: list[RoomAssigneePublic]
     coverage: Literal["covered", "needs_attention"]
 
 
@@ -254,10 +260,19 @@ class RoomAssignmentCreate(APIModel):
 
 
 class RoomStaffAssignmentCreate(APIModel):
-    user_id: UUID
     duty_role: RoomDutyRole
     starts_at: datetime
     ends_at: datetime | None = None
+    user_id: UUID | None = None
+    volunteer_name: str | None = Field(default=None, max_length=200)
+
+    @field_validator("volunteer_name")
+    @classmethod
+    def normalize_volunteer_name(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        collapsed = " ".join(value.split())
+        return collapsed or None
 
     @field_validator("ends_at")
     @classmethod
@@ -266,6 +281,23 @@ class RoomStaffAssignmentCreate(APIModel):
         if value is not None and starts_at and value <= starts_at:
             raise ValueError("ends_at must be after starts_at")
         return value
+
+    @model_validator(mode="after")
+    def assignee_matches_duty(self):
+        if self.duty_role == RoomDutyRole.COORDINATOR:
+            if self.user_id is None:
+                raise ValueError("Choose a coordinator account.")
+            if self.volunteer_name is not None:
+                raise ValueError("Coordinator assignments use a staff account.")
+        elif not self.volunteer_name:
+            raise ValueError("Enter the volunteer name.")
+        elif self.user_id is not None:
+            raise ValueError("Volunteer assignments are recorded by name.")
+        return self
+
+
+class RoomStaffRelease(APIModel):
+    assignment_id: UUID
 
 
 class RoomStaffAssignmentView(RoomStaffAssignmentCreate):

@@ -19,15 +19,30 @@ EVENT_TIMEZONE = ZoneInfo("Asia/Kolkata")
 
 TRACKS = (("THEME-1", "Open Innovation"),)
 PANELS = ("Panel Alpha", "Panel Beta", "Panel Gamma", "Panel Delta", "Panel Epsilon")
-ROOMS = tuple(
-    (f"{floor}-{number}", floor)
-    for floor, numbers in (
-        ("A", range(104, 110)),
-        ("B", range(201, 207)),
-        ("C", range(301, 307)),
-    )
-    for number in numbers
+ROOM_CODES = (
+    "1307",
+    "1308",
+    "1309",
+    "1316A",
+    "1316D",
+    "1321A",
+    "1321D",
+    "1323A",
+    "1323D",
+    "1324",
+    "1325",
+    "1326",
+    "1327",
+    "1328",
+    "1329",
+    "1401",
+    "1402",
+    "1410",
+    "1411",
+    "1412",
+    "1413",
 )
+ROOMS = tuple((code, code[:2]) for code in ROOM_CODES)
 
 
 async def seed_event(session: AsyncSession) -> Event:
