@@ -17,7 +17,7 @@ CuriousPARC brings together the operational workflows that typically run across 
 - leads can track judging queues and evaluation completion
 - organizers can maintain accountability through activity records and audit-friendly updates
 
-This repository currently contains the operations dashboard and event-status UI used to model that workflow. It is a frontend-first prototype built around realistic event data and real event operations patterns.
+This repository contains the operations dashboard and event-status UI used to model that workflow, together with the initial FastAPI and PostgreSQL backend foundation. The operational domain APIs and persisted event tables are being introduced incrementally from this foundation.
 
 ## Features
 
@@ -58,7 +58,7 @@ The repository is implemented as a Next.js application with a modern frontend st
 - Lucide icons and Sonner toast notifications
 - Vercel Analytics integration
 
-The codebase is structured as a frontend application under the `frontend/` directory and is intended to be deployed to Vercel. A production backend and persisted data layer are part of the intended architecture, but they are not implemented in this repository.
+The codebase is structured as a Next.js application under `frontend/` and a FastAPI service under `backend/`. The backend currently provides infrastructure, health/readiness checks, database connectivity, the initial operational schema, reference-data seeding, and validated team CSV import. Domain API endpoints are the next implementation phase.
 
 The intended production design is:
 
@@ -67,7 +67,7 @@ The intended production design is:
 - PostgreSQL for operational data, team records, logs, and audit history
 - API layer for authentication, authorization, real-time operations updates, and state sync
 
-This repository currently contains the user interface and mock operational state only. It should be treated as the dashboard layer of the broader CuriousPARC operations system, not as the complete end-to-end platform.
+The frontend still uses mock operational state. It should be treated as the dashboard layer of the broader CuriousPARC operations system until the domain migrations and APIs replace those mocks.
 
 ## Getting started
 
@@ -75,6 +75,7 @@ This repository currently contains the user interface and mock operational state
 
 - Node.js 18 or later
 - npm 9 or later
+- Docker Desktop with Docker Compose
 - A local terminal for running the app
 
 ### Installation
@@ -101,6 +102,16 @@ Then open the local URL printed by Next.js in the terminal, typically:
 http://localhost:3000
 ```
 
+Start the backend and PostgreSQL from the repository root:
+
+```bash
+docker compose up --build
+```
+
+The API is available at `http://localhost:8000`, with OpenAPI documentation at
+`http://localhost:8000/docs`. See `backend/README.md` for health checks,
+migrations, tests, and lint commands.
+
 ### Production build
 
 ```bash
@@ -115,6 +126,14 @@ This project’s build has been validated with the repository’s current config
 ```text
 .
 ├── .git/
+├── backend/
+│   ├── alembic/
+│   ├── app/
+│   ├── tests/
+│   ├── Dockerfile
+│   └── pyproject.toml
+├── docs/
+│   └── operations-contract.md
 ├── frontend/
 │   ├── app/
 │   │   ├── globals.css
@@ -134,12 +153,16 @@ This project’s build has been validated with the repository’s current config
 │   ├── pnpm-lock.yaml
 │   ├── postcss.config.mjs
 │   └── tsconfig.json
-├── README.md
-└── .gitignore
+├── compose.yaml
+├── .env.example
+├── .gitignore
+└── README.md
 ```
 
 Key areas:
 
+- `backend/`: FastAPI service, database connectivity, and migration tooling
+- `docs/operations-contract.md`: agreed workflow, permissions, privacy, and API conventions
 - `frontend/app/`: application shell and main dashboard screen
 - `frontend/components/`: reusable UI components and event operations panels
 - `frontend/lib/`: shared utilities and mock data sources
@@ -160,15 +183,20 @@ The current codebase includes the following implemented functionality:
 - mock event timeline and team activity records
 - responsive layout for event operations dashboards
 - production-ready frontend build configuration for Next.js deployment
+- Docker Compose development environment for FastAPI and PostgreSQL
+- backend liveness/readiness endpoints and request correlation IDs
+- Alembic migration scaffold, backend tests, and lint configuration
+- PostgreSQL operational models and initial schema migration
+- idempotent development reference-data seeding
+- validated, dry-run-first team CSV importer
 
 ### Planned / not yet implemented
 
 The following items are part of the intended CuriousPARC platform but are not yet implemented in this repository:
 
 - real authentication and role-based access control
-- backend API layer for event writes and reads
+- event-domain API endpoints for operational writes and reads
 - Railway deployment configuration
-- PostgreSQL persistence and migration setup
 - live check-in ingestion and real-time updates
 - audit-trail storage and immutable event logs
 - coordinator/lead editing flows for operational updates
