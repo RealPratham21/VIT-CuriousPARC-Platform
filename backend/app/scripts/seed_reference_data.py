@@ -17,7 +17,17 @@ from app.models.room import Room
 EVENT_SLUG = "curiousparc-2026"
 EVENT_TIMEZONE = ZoneInfo("Asia/Kolkata")
 
-TRACKS = (("THEME-1", "Open Innovation"),)
+TRACKS = (
+    ("THEME-1", "Open Innovation"),
+    ("THEME-2", "Agentic AI"),
+    ("THEME-3", "Computer Vision"),
+    ("THEME-4", "Internet of Things (IoT)"),
+    ("THEME-5", "Web & App Development"),
+    ("THEME-6", "AI Model Optimization"),
+    ("THEME-7", "Build Your Own Boards"),
+    ("THEME-8", "Conversational Voice Assistant"),
+    ("THEME-9", "General Robotics"),
+)
 PANELS = tuple(f"Panel {number}" for number in range(1, 19))
 ROOM_CODES = (
     "1307",
@@ -63,6 +73,7 @@ async def seed_event(session: AsyncSession) -> Event:
 
 async def seed_tracks(session: AsyncSession, event: Event) -> int:
     created = 0
+    codes = [code for code, _name in TRACKS]
     for code, name in TRACKS:
         track = await session.scalar(
             select(Track).where(Track.event_id == event.id, Track.code == code)
@@ -70,6 +81,20 @@ async def seed_tracks(session: AsyncSession, event: Event) -> int:
         if track is None:
             session.add(Track(event_id=event.id, code=code, name=name))
             created += 1
+        else:
+            track.name = name
+            track.is_active = True
+    extras = (
+        await session.scalars(
+            select(Track).where(
+                Track.event_id == event.id,
+                Track.code.not_in(codes),
+                Track.is_active.is_(True),
+            )
+        )
+    ).all()
+    for track in extras:
+        track.is_active = False
     return created
 
 

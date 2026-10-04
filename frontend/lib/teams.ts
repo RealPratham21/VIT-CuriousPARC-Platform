@@ -174,6 +174,20 @@ export function canUpdateEvaluation(user: StaffUser | null) {
   return hasEventRole(user, EVALUATION_ROLES)
 }
 
+export function trackLabel(track: { code: string; name: string }) {
+  const number = track.code.match(/^THEME-(\d+)$/i)?.[1]
+  return number ? `THEME ${number}: ${track.name}` : track.name
+}
+
+export function compareTracks(left: { code: string }, right: { code: string }) {
+  const leftNumber = Number(left.code.match(/\d+/)?.[0])
+  const rightNumber = Number(right.code.match(/\d+/)?.[0])
+  if (Number.isFinite(leftNumber) && Number.isFinite(rightNumber) && leftNumber !== rightNumber) {
+    return leftNumber - rightNumber
+  }
+  return left.code.localeCompare(right.code)
+}
+
 export function comparePanelNames(left: string, right: string) {
   const leftNumber = Number(left.match(/\d+/)?.[0])
   const rightNumber = Number(right.match(/\d+/)?.[0])
