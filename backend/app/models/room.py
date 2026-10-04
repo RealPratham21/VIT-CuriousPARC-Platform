@@ -78,6 +78,12 @@ class RoomStaffAssignment(UUIDPrimaryKeyMixin, Base):
             "ends_at IS NULL OR ends_at > starts_at",
             name="date_range_valid",
         ),
+        CheckConstraint(
+            "(duty_role = 'coordinator' AND user_id IS NOT NULL AND volunteer_name IS NULL) OR "
+            "(duty_role = 'volunteer' AND user_id IS NULL AND volunteer_name IS NOT NULL "
+            "AND length(btrim(volunteer_name)) > 0)",
+            name="assignee_shape",
+        ),
         Index(
             "uq_room_staff_assignments_current_user_duty",
             "user_id",
@@ -85,15 +91,23 @@ class RoomStaffAssignment(UUIDPrimaryKeyMixin, Base):
             unique=True,
             postgresql_where=text("ends_at IS NULL"),
         ),
+        Index(
+            "uq_room_staff_assignments_current_volunteer_name",
+            "room_id",
+            text("lower(volunteer_name)"),
+            unique=True,
+            postgresql_where=text("ends_at IS NULL AND duty_role = 'volunteer'"),
+        ),
         Index("ix_room_staff_assignments_room_current", "room_id", "ends_at"),
     )
 
     room_id: Mapped[UUID] = mapped_column(
         ForeignKey("rooms.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    user_id: Mapped[UUID] = mapped_column(
-        ForeignKey("staff_users.id", ondelete="CASCADE"), nullable=False, index=True
+    user_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("staff_users.id", ondelete="CASCADE"), index=True
     )
+    volunteer_name: Mapped[str | None] = mapped_column(String(200))
     duty_role: Mapped[RoomDutyRole] = mapped_column(
         enum_type(RoomDutyRole, "room_duty_role"),
         nullable=False,

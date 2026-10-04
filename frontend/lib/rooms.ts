@@ -1,11 +1,10 @@
 import { EVENT_SLUG } from "@/lib/auth"
+import { staffRequest } from "@/lib/teams"
 
-export type RoomOfficial = {
+export type RoomAssignee = {
   id: string
   full_name: string
-  roles: string[]
-  rooms: Array<{ id: string; code: string; floor: string }>
-  managed_team_count: number
+  user_id: string | null
 }
 
 export type RoomTeam = {
@@ -31,8 +30,8 @@ export type RoomSummary = {
   capacity: number | null
   allocated_teams: number
   checked_in_teams: number
-  volunteer: RoomOfficial | null
-  coordinator: RoomOfficial | null
+  volunteers: RoomAssignee[]
+  coordinators: RoomAssignee[]
   coverage: "covered" | "needs_attention"
 }
 
@@ -70,4 +69,35 @@ export function listRooms() {
 
 export function getRoom(roomId: string) {
   return publicGet<RoomDetail>(`/public/events/${EVENT_SLUG}/rooms/${roomId}`)
+}
+
+export function assignCoordinator(eventId: string, roomId: string, userId: string) {
+  return staffRequest(`/staff/events/${eventId}/rooms/${roomId}/staff-assignments`, {
+    method: "POST",
+    body: JSON.stringify({
+      user_id: userId,
+      duty_role: "coordinator",
+      starts_at: new Date().toISOString(),
+      ends_at: null,
+    }),
+  }, "Could not assign that coordinator.")
+}
+
+export function assignVolunteer(eventId: string, roomId: string, name: string) {
+  return staffRequest(`/staff/events/${eventId}/rooms/${roomId}/staff-assignments`, {
+    method: "POST",
+    body: JSON.stringify({
+      volunteer_name: name,
+      duty_role: "volunteer",
+      starts_at: new Date().toISOString(),
+      ends_at: null,
+    }),
+  }, "Could not assign that volunteer.")
+}
+
+export function releaseRoomAssignment(eventId: string, roomId: string, assignmentId: string) {
+  return staffRequest(`/staff/events/${eventId}/rooms/${roomId}/staff-assignments/release`, {
+    method: "POST",
+    body: JSON.stringify({ assignment_id: assignmentId }),
+  }, "Could not remove that assignment.")
 }
