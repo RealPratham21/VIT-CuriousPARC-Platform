@@ -43,7 +43,23 @@ docker compose exec backend python -m app.scripts.seed_reference_data
 ```
 
 The seed deliberately does not create a staff account; authentication and
-password provisioning belong to the authentication slice.
+password provisioning use the explicit bootstrap command below.
+
+## Bootstrap the first administrator
+
+After seeding reference data, provide the password through an environment
+variable so it is not stored in the repository or passed as a command argument:
+
+```powershell
+$env:HACKOPS_BOOTSTRAP_PASSWORD = "replace-with-a-long-unique-password"
+docker compose exec backend python -m app.scripts.bootstrap_admin `
+  --staff-code HC-ADMIN-001 `
+  --full-name "Hackathon Administrator"
+Remove-Item Env:HACKOPS_BOOTSTRAP_PASSWORD
+```
+
+See `docs/api-reference.md` at the repository root for route purposes,
+permissions, frontend mapping, and request/response examples.
 
 ## Team CSV import
 
