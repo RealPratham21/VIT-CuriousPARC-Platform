@@ -18,7 +18,7 @@ EVENT_SLUG = "curiousparc-2026"
 EVENT_TIMEZONE = ZoneInfo("Asia/Kolkata")
 
 TRACKS = (("THEME-1", "Open Innovation"),)
-PANELS = ("Panel Alpha", "Panel Beta", "Panel Gamma", "Panel Delta", "Panel Epsilon")
+PANELS = tuple(f"Panel {number}" for number in range(1, 19))
 ROOM_CODES = (
     "1307",
     "1308",
@@ -97,6 +97,19 @@ async def seed_panels(session: AsyncSession, event: Event) -> int:
         if panel is None:
             session.add(JudgingPanel(event_id=event.id, name=name))
             created += 1
+        elif not panel.is_active:
+            panel.is_active = True
+    extras = (
+        await session.scalars(
+            select(JudgingPanel).where(
+                JudgingPanel.event_id == event.id,
+                JudgingPanel.name.not_in(PANELS),
+                JudgingPanel.is_active.is_(True),
+            )
+        )
+    ).all()
+    for panel in extras:
+        panel.is_active = False
     return created
 
 

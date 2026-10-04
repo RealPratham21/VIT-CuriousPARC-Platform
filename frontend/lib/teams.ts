@@ -174,6 +174,15 @@ export function canUpdateEvaluation(user: StaffUser | null) {
   return hasEventRole(user, EVALUATION_ROLES)
 }
 
+export function comparePanelNames(left: string, right: string) {
+  const leftNumber = Number(left.match(/\d+/)?.[0])
+  const rightNumber = Number(right.match(/\d+/)?.[0])
+  if (Number.isFinite(leftNumber) && Number.isFinite(rightNumber) && leftNumber !== rightNumber) {
+    return leftNumber - rightNumber
+  }
+  return left.localeCompare(right)
+}
+
 export function canPublishAnnouncement(user: StaffUser | null) {
   return hasEventRole(user, ANNOUNCE_ROLES)
 }
