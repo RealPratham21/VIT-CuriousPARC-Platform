@@ -178,6 +178,10 @@ export function canPublishAnnouncement(user: StaffUser | null) {
   return hasEventRole(user, ANNOUNCE_ROLES)
 }
 
+export function canControlRound(user: StaffUser | null) {
+  return hasEventRole(user, ANNOUNCE_ROLES)
+}
+
 export function canManageTeam(user: StaffUser | null) {
   return canRegisterTeam(user) || canCheckInTeam(user) || canUpdateEvaluation(user)
 }

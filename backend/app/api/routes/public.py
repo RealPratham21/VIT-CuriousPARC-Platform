@@ -346,6 +346,17 @@ async def get_room(
     )
 
 
+@router.get("/rounds", response_model=list[RoundPublic])
+async def list_rounds(slug: str, session: AsyncSession = Depends(db_session)) -> list[RoundPublic]:
+    event = await event_by_slug(session, slug)
+    records = (
+        await session.scalars(
+            select(Round).where(Round.event_id == event.id).order_by(Round.sequence_number)
+        )
+    ).all()
+    return [RoundPublic.model_validate(record) for record in records]
+
+
 @router.get("/rounds/current", response_model=RoundPublic | None)
 async def current_round(
     slug: str, session: AsyncSession = Depends(db_session)
