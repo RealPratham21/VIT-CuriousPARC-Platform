@@ -1,9 +1,10 @@
 "use client"
 
-import { useEffect, useState, type FormEvent, type ReactNode } from "react"
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react"
 import { Activity, CheckCircle2, Download, Loader2, Search, UserPlus } from "lucide-react"
 
 import { useAuth } from "@/components/auth-provider"
+import { TeamOfficialControls } from "@/components/team-official-controls"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -24,12 +25,19 @@ import {
   type TeamPage,
   type TrackRef,
   STATUS_FILTERS,
+  type RoomOption,
+  type TeamStaff,
+  addTeamMember,
+  assignTeamRoom,
+  canManageTeam,
   canRegisterTeam,
   evaluationLabel,
   evaluationTone,
   eventIdForUser,
   formatEventTime,
+  getStaffTeam,
   getTeam,
+  listRooms,
   listTeams,
   listTracks,
   registerTeam,
@@ -83,6 +91,7 @@ export function TeamsDirectory() {
   const filtering = Boolean(request.q || request.evaluationStatus)
   const summary = filtering ? `${total} matching` : `${total} registered`
   const showRegister = authStatus === "ready" && canRegisterTeam(user)
+  const showManage = authStatus === "ready" && canManageTeam(user)
 
   function exportCurrentPage() {
     const items = directory?.items ?? []
@@ -117,7 +126,9 @@ export function TeamsDirectory() {
             <div>
               <CardTitle className="text-sm">All teams</CardTitle>
               <p className="mt-1 text-xs text-muted-foreground">
-                {loading && !directory ? "Loading team records" : `${summary} · click any row for the status timeline`}
+                {loading && !directory
+                  ? "Loading team records"
+                  : `${summary} · click any row for the timeline${showManage ? " and team updates" : ""}`}
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -238,7 +249,13 @@ export function TeamsDirectory() {
           ) : null}
         </CardContent>
       </Card>
-      {selectedId ? <TeamTimelineDialog teamId={selectedId} onClose={() => setSelectedId(null)} /> : null}
+      {selectedId ? (
+        <TeamTimelineDialog
+          teamId={selectedId}
+          onClose={() => setSelectedId(null)}
+          onChanged={() => setReloadKey((value) => value + 1)}
+        />
+      ) : null}
       <RegisterTeamDialog
         open={registerOpen}
         onOpenChange={setRegisterOpen}
@@ -261,9 +278,23 @@ function EvaluationBadge({ status }: { status: EvaluationStatus | null }) {
   )
 }
 
-function TeamTimelineDialog({ teamId, onClose }: { teamId: string; onClose: () => void }) {
+function TeamTimelineDialog({
+  teamId,
+  onClose,
+  onChanged,
+}: {
+  teamId: string
+  onClose: () => void
+  onChanged: () => void
+}) {
+  const { user, status: authStatus } = useAuth()
+  const eventId = eventIdForUser(user)
+  const official = authStatus === "ready" && Boolean(eventId) && canManageTeam(user)
   const [detail, setDetail] = useState<TeamDetail | null>(null)
+  const [staff, setStaff] = useState<TeamStaff | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [staffError, setStaffError] = useState<string | null>(null)
+  const [reloadKey, setReloadKey] = useState(0)
 
   useEffect(() => {
     let active = true
@@ -277,26 +308,49 @@ function TeamTimelineDialog({ teamId, onClose }: { teamId: string; onClose: () =
     return () => {
       active = false
     }
-  }, [teamId])
+  }, [teamId, reloadKey])
 
+  useEffect(() => {
+    if (!official || !eventId) return
+    let active = true
+    getStaffTeam(eventId, teamId)
+      .then((result) => {
+        if (!active) return
+        setStaff(result)
+        setStaffError(null)
+      })
+      .catch((caught: unknown) => {
+        if (active) setStaffError(caught instanceof Error ? caught.message : "Could not load the staff record.")
+      })
+    return () => {
+      active = false
+    }
+  }, [eventId, official, teamId, reloadKey])
+
+  const shown = staff ?? detail
   const timeline = [...(detail?.timeline ?? [])].sort(
     (left, right) => new Date(left.created_at).getTime() - new Date(right.created_at).getTime(),
   )
 
+  function refresh() {
+    setReloadKey((value) => value + 1)
+    onChanged()
+  }
+
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center justify-between gap-3 pr-6">
             <div>
-              <DialogTitle>{detail?.name ?? "Team timeline"}</DialogTitle>
+              <DialogTitle>{shown?.name ?? "Team timeline"}</DialogTitle>
               <DialogDescription>
-                {detail
-                  ? `${detail.team_code} · ${detail.room ? `Room ${detail.room.code}` : "No room"} · ${detail.evaluation?.panel?.name ?? "No panel"}`
+                {shown
+                  ? `${shown.team_code} · ${shown.room ? `Room ${shown.room.code}` : "No room"} · ${shown.evaluation?.panel?.name ?? "No panel"}`
                   : "Loading the public timeline"}
               </DialogDescription>
             </div>
-            {detail ? <EvaluationBadge status={detail.evaluation?.status ?? null} /> : null}
+            {shown ? <EvaluationBadge status={shown.evaluation?.status ?? null} /> : null}
           </div>
         </DialogHeader>
         <div className="mt-2">
@@ -329,10 +383,21 @@ function TeamTimelineDialog({ teamId, onClose }: { teamId: string; onClose: () =
               ))}
             </div>
           ) : null}
+          {official && eventId && staff ? <TeamOfficialControls eventId={eventId} team={staff} onChanged={refresh} /> : null}
+          {official && !staff && !staffError ? <p className="mt-4 text-xs text-muted-foreground">Loading the staff record…</p> : null}
+          {staffError ? <p className="mt-4 text-xs text-destructive">{staffError}</p> : null}
         </div>
       </DialogContent>
     </Dialog>
   )
+}
+
+type ExtraMember = {
+  key: string
+  name: string
+  phone: string
+  email: string
+  saved: boolean
 }
 
 function RegisterTeamDialog({
@@ -346,6 +411,7 @@ function RegisterTeamDialog({
 }) {
   const { user } = useAuth()
   const [tracks, setTracks] = useState<TrackRef[]>([])
+  const [rooms, setRooms] = useState<RoomOption[]>([])
   const [trackError, setTrackError] = useState<string | null>(null)
   const [teamCode, setTeamCode] = useState("")
   const [name, setName] = useState("")
@@ -354,8 +420,13 @@ function RegisterTeamDialog({
   const [leaderName, setLeaderName] = useState("")
   const [leaderPhone, setLeaderPhone] = useState("")
   const [leaderEmail, setLeaderEmail] = useState("")
+  const [roomId, setRoomId] = useState("")
+  const [extras, setExtras] = useState<ExtraMember[]>([])
+  const [createdTeamId, setCreatedTeamId] = useState<string | null>(null)
+  const [createdTeamCode, setCreatedTeamCode] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [pending, setPending] = useState(false)
+  const finished = useRef(false)
 
   useEffect(() => {
     if (!open) return
@@ -369,6 +440,13 @@ function RegisterTeamDialog({
       .catch((caught: unknown) => {
         if (active) setTrackError(caught instanceof Error ? caught.message : "Could not load tracks.")
       })
+    listRooms()
+      .then((result) => {
+        if (active) setRooms([...result].sort((left, right) => left.code.localeCompare(right.code)))
+      })
+      .catch((caught: unknown) => {
+        if (active) setTrackError(caught instanceof Error ? caught.message : "Could not load rooms.")
+      })
     return () => {
       active = false
     }
@@ -381,7 +459,26 @@ function RegisterTeamDialog({
     setLeaderName("")
     setLeaderPhone("")
     setLeaderEmail("")
+    setRoomId("")
+    setExtras([])
+    setCreatedTeamId(null)
+    setCreatedTeamCode(null)
     setError(null)
+  }
+
+  function updateExtra(key: string, patch: Partial<Pick<ExtraMember, "name" | "phone" | "email">>) {
+    setExtras((current) => current.map((member) => (member.key === key ? { ...member, ...patch } : member)))
+  }
+
+  function closeDialog(next: boolean) {
+    if (pending) return
+    const code = finished.current ? null : createdTeamCode
+    finished.current = false
+    onOpenChange(next)
+    if (!next) {
+      resetForm()
+      if (code) onRegistered(code)
+    }
   }
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
@@ -391,33 +488,58 @@ function RegisterTeamDialog({
       setError("This account is not assigned to CuriousPARC 2026.")
       return
     }
-    if (teamCode.trim().length < 2 || !name.trim() || !leaderName.trim() || !trackId) {
+    if (!createdTeamId && (teamCode.trim().length < 2 || !name.trim() || !leaderName.trim() || !trackId)) {
       setError("Team code, name, track, and leader name are required.")
       return
     }
     let expected: number | undefined
-    if (expectedCount.trim()) {
+    if (!createdTeamId && expectedCount.trim()) {
       expected = Number(expectedCount)
       if (!Number.isInteger(expected) || expected < 1) {
         setError("Expected member count must be a whole number greater than 0.")
         return
       }
     }
+    const pendingMembers = extras.filter((member) => !member.saved && (member.name.trim() || member.phone.trim() || member.email.trim()))
+    if (pendingMembers.some((member) => !member.name.trim())) {
+      setError("Each additional member needs a name.")
+      return
+    }
     setPending(true)
     setError(null)
     try {
-      const created = await registerTeam(eventId, {
-        team_code: teamCode.trim(),
-        name: name.trim(),
-        track_id: trackId,
-        leader_name: leaderName.trim(),
-        ...(expected ? { expected_member_count: expected } : {}),
-        ...(leaderPhone.trim() ? { leader_phone_e164: leaderPhone.trim() } : {}),
-        ...(leaderEmail.trim() ? { leader_email: leaderEmail.trim() } : {}),
-      })
+      let teamId = createdTeamId
+      let code = createdTeamCode
+      if (!teamId) {
+        const created = await registerTeam(eventId, {
+          team_code: teamCode.trim(),
+          name: name.trim(),
+          track_id: trackId,
+          leader_name: leaderName.trim(),
+          ...(expected ? { expected_member_count: expected } : {}),
+          ...(leaderPhone.trim() ? { leader_phone_e164: leaderPhone.trim() } : {}),
+          ...(leaderEmail.trim() ? { leader_email: leaderEmail.trim() } : {}),
+        })
+        teamId = created.id
+        code = created.team_code
+        setCreatedTeamId(teamId)
+        setCreatedTeamCode(code)
+      }
+      for (const member of pendingMembers) {
+        await addTeamMember(eventId, teamId, {
+          full_name: member.name.trim(),
+          ...(member.phone.trim() ? { phone_e164: member.phone.trim() } : {}),
+          ...(member.email.trim() ? { email: member.email.trim() } : {}),
+        })
+        setExtras((current) => current.map((item) => (item.key === member.key ? { ...item, saved: true } : item)))
+      }
+      if (roomId) await assignTeamRoom(eventId, teamId, roomId)
+      const registeredCode = code ?? teamCode.trim()
+      finished.current = true
       resetForm()
       onOpenChange(false)
-      onRegistered(created.team_code)
+      onRegistered(registeredCode)
+      finished.current = false
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not register the team.")
     } finally {
@@ -426,25 +548,18 @@ function RegisterTeamDialog({
   }
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(next) => {
-        if (pending) return
-        onOpenChange(next)
-        if (!next) setError(null)
-      }}
-    >
-      <DialogContent className="max-w-md">
+    <Dialog open={open} onOpenChange={closeDialog}>
+      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Register team</DialogTitle>
-          <DialogDescription>Add a team and its leader. The new team appears on the public directory.</DialogDescription>
+          <DialogDescription>Add the team, its leader, any other members, and a room if they have one.</DialogDescription>
         </DialogHeader>
         <form className="grid gap-3" onSubmit={onSubmit}>
           <Field label="Team code" id="team-code">
-            <Input id="team-code" value={teamCode} onChange={(event) => setTeamCode(event.target.value)} className="h-9 text-sm" disabled={pending} />
+            <Input id="team-code" value={teamCode} onChange={(event) => setTeamCode(event.target.value)} className="h-9 text-sm" disabled={pending || Boolean(createdTeamId)} />
           </Field>
           <Field label="Team name" id="team-name">
-            <Input id="team-name" value={name} onChange={(event) => setName(event.target.value)} className="h-9 text-sm" disabled={pending} />
+            <Input id="team-name" value={name} onChange={(event) => setName(event.target.value)} className="h-9 text-sm" disabled={pending || Boolean(createdTeamId)} />
           </Field>
           <Field label="Track" id="team-track">
             <select
@@ -452,7 +567,7 @@ function RegisterTeamDialog({
               value={trackId}
               onChange={(event) => setTrackId(event.target.value)}
               className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
-              disabled={pending || tracks.length === 0}
+              disabled={pending || tracks.length === 0 || Boolean(createdTeamId)}
             >
               {tracks.length === 0 ? <option value="">No tracks available</option> : null}
               {tracks.map((track) => (
@@ -470,11 +585,11 @@ function RegisterTeamDialog({
               onChange={(event) => setExpectedCount(event.target.value)}
               placeholder="Optional"
               className="h-9 text-sm"
-              disabled={pending}
+              disabled={pending || Boolean(createdTeamId)}
             />
           </Field>
           <Field label="Leader name" id="leader-name">
-            <Input id="leader-name" value={leaderName} onChange={(event) => setLeaderName(event.target.value)} className="h-9 text-sm" disabled={pending} />
+            <Input id="leader-name" value={leaderName} onChange={(event) => setLeaderName(event.target.value)} className="h-9 text-sm" disabled={pending || Boolean(createdTeamId)} />
           </Field>
           <Field label="Leader phone" id="leader-phone">
             <Input
@@ -483,7 +598,7 @@ function RegisterTeamDialog({
               onChange={(event) => setLeaderPhone(event.target.value)}
               placeholder="Optional"
               className="h-9 text-sm"
-              disabled={pending}
+              disabled={pending || Boolean(createdTeamId)}
             />
           </Field>
           <Field label="Leader email" id="leader-email">
@@ -494,9 +609,71 @@ function RegisterTeamDialog({
               onChange={(event) => setLeaderEmail(event.target.value)}
               placeholder="Optional"
               className="h-9 text-sm"
-              disabled={pending}
+              disabled={pending || Boolean(createdTeamId)}
             />
           </Field>
+          <Field label="Room" id="arrival-room">
+            <select
+              id="arrival-room"
+              value={roomId}
+              onChange={(event) => setRoomId(event.target.value)}
+              className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+              disabled={pending}
+            >
+              <option value="">No room yet</option>
+              {rooms.map((room) => (
+                <option key={room.id} value={room.id}>
+                  {room.floor} · {room.code}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <div className="grid gap-2">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-medium">Other members</p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-7"
+                disabled={pending}
+                onClick={() => setExtras((current) => [...current, { key: crypto.randomUUID(), name: "", phone: "", email: "", saved: false }])}
+              >
+                Add member
+              </Button>
+            </div>
+            {extras.map((member) => (
+              <div className="grid gap-2 rounded-md border border-border/60 p-2" key={member.key}>
+                <Input
+                  value={member.name}
+                  onChange={(event) => updateExtra(member.key, { name: event.target.value })}
+                  placeholder="Name"
+                  className="h-8 text-xs"
+                  disabled={pending || member.saved}
+                  aria-label="Member name"
+                />
+                <div className="grid grid-cols-2 gap-2">
+                  <Input
+                    value={member.phone}
+                    onChange={(event) => updateExtra(member.key, { phone: event.target.value })}
+                    placeholder="Phone"
+                    className="h-8 text-xs"
+                    disabled={pending || member.saved}
+                    aria-label="Member phone"
+                  />
+                  <Input
+                    value={member.email}
+                    onChange={(event) => updateExtra(member.key, { email: event.target.value })}
+                    placeholder="Email"
+                    className="h-8 text-xs"
+                    disabled={pending || member.saved}
+                    aria-label="Member email"
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+          {createdTeamId ? <p className="text-xs text-muted-foreground">The team is registered. Finish the remaining members or room, then submit again.</p> : null}
           {trackError ? <p className="text-xs text-destructive">{trackError}</p> : null}
           {error ? <p className="text-xs text-destructive">{error}</p> : null}
           <DialogFooter>
