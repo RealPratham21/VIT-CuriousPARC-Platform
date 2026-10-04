@@ -1,14 +1,26 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, type FormEvent } from "react"
 import { Activity, ArrowUpRight, BadgeCheck, Building2, ClipboardCheck, Clock3, Loader2, Megaphone, Users } from "lucide-react"
 
+import { useAuth } from "@/components/auth-provider"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { Progress } from "@/components/ui/progress"
+import { Textarea } from "@/components/ui/textarea"
 import { fetchDashboard, type DashboardSnapshot, type RoundStatus } from "@/lib/dashboard"
-import { formatEventTime } from "@/lib/teams"
+import { canPublishAnnouncement, eventIdForUser, formatEventTime, publishAnnouncement } from "@/lib/teams"
 
 type Destination = "teams" | "rooms" | "evaluations"
 
@@ -19,6 +31,9 @@ export function OperationsDashboard({ setView }: { setView: (view: Destination) 
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [reloadKey, setReloadKey] = useState(0)
+  const [announceOpen, setAnnounceOpen] = useState(false)
+  const { user, status: authStatus } = useAuth()
+  const canAnnounce = authStatus === "ready" && canPublishAnnouncement(user)
 
   useEffect(() => {
     let active = true
@@ -75,18 +90,29 @@ export function OperationsDashboard({ setView }: { setView: (view: Destination) 
 
   return (
     <div className="flex flex-col gap-5">
-      {announcement ? (
+      {announcement || canAnnounce ? (
         <Card className="border-primary/20 bg-primary/5">
           <CardContent className="flex flex-wrap items-center gap-3 p-3">
             <div className="flex size-8 items-center justify-center rounded-md bg-primary/15 text-primary">
               <Megaphone className="size-4" />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-[10px] font-medium uppercase tracking-wider text-primary">
-                Latest announcement · {formatEventTime(announcement.published_at)}
-              </p>
-              <p className="truncate text-sm font-medium">{announcement.message}</p>
+              {announcement ? (
+                <>
+                  <p className="text-[10px] font-medium uppercase tracking-wider text-primary">
+                    Latest announcement · {formatEventTime(announcement.published_at)}
+                  </p>
+                  <p className="truncate text-sm font-medium">{announcement.message}</p>
+                </>
+              ) : (
+                <p className="text-sm text-muted-foreground">No announcement is published.</p>
+              )}
             </div>
+            {canAnnounce ? (
+              <Button size="sm" className="h-8" onClick={() => setAnnounceOpen(true)}>
+                New announcement
+              </Button>
+            ) : null}
           </CardContent>
         </Card>
       ) : null}
@@ -189,7 +215,93 @@ export function OperationsDashboard({ setView }: { setView: (view: Destination) 
           </CardContent>
         </Card>
       </div>
+      <AnnouncementDialog
+        open={announceOpen}
+        onOpenChange={setAnnounceOpen}
+        onPublished={() => setReloadKey((value) => value + 1)}
+      />
     </div>
+  )
+}
+
+function AnnouncementDialog({
+  open,
+  onOpenChange,
+  onPublished,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  onPublished: () => void
+}) {
+  const { user } = useAuth()
+  const [title, setTitle] = useState("")
+  const [message, setMessage] = useState("")
+  const [error, setError] = useState<string | null>(null)
+  const [pending, setPending] = useState(false)
+
+  async function onSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const eventId = eventIdForUser(user)
+    if (!eventId) {
+      setError("This account is not assigned to CuriousPARC 2026.")
+      return
+    }
+    if (!title.trim() || !message.trim()) {
+      setError("A title and a message are required.")
+      return
+    }
+    setPending(true)
+    setError(null)
+    try {
+      await publishAnnouncement(eventId, { title: title.trim(), message: message.trim() })
+      setTitle("")
+      setMessage("")
+      onOpenChange(false)
+      onPublished()
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not publish the announcement.")
+    } finally {
+      setPending(false)
+    }
+  }
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (pending) return
+        onOpenChange(next)
+        if (!next) setError(null)
+      }}
+    >
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>New announcement</DialogTitle>
+          <DialogDescription>Publishes immediately on the operations board.</DialogDescription>
+        </DialogHeader>
+        <form className="grid gap-3" onSubmit={onSubmit}>
+          <div className="grid gap-1.5">
+            <Label htmlFor="announcement-title" className="text-xs">
+              Title
+            </Label>
+            <Input id="announcement-title" value={title} onChange={(event) => setTitle(event.target.value)} className="h-9 text-sm" disabled={pending} />
+          </div>
+          <div className="grid gap-1.5">
+            <Label htmlFor="announcement-message" className="text-xs">
+              Message
+            </Label>
+            <Textarea id="announcement-message" value={message} onChange={(event) => setMessage(event.target.value)} className="min-h-24 text-sm" disabled={pending} />
+          </div>
+          {error ? <p className="text-xs text-destructive">{error}</p> : null}
+          <DialogFooter>
+            <Button type="submit" size="sm" disabled={pending}>
+              {pending ? <Loader2 className="animate-spin" data-icon="inline-start" /> : <Megaphone data-icon="inline-start" />}
+              {pending ? "Publishing" : "Publish"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   )
 }
 
