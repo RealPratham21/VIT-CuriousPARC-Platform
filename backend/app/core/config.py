@@ -1,8 +1,10 @@
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+LOCAL_JWT_SECRET = "local-development-secret-change-before-deploying"
 
 
 class Settings(BaseSettings):
@@ -22,9 +24,27 @@ class Settings(BaseSettings):
     cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:3000"])
     log_level: str = "INFO"
 
-    jwt_secret: str = "local-development-secret-change-before-deploying"
+    jwt_secret: str = LOCAL_JWT_SECRET
     access_token_expire_minutes: int = 15
     refresh_token_expire_days: int = 7
+
+    @field_validator("database_url", mode="before")
+    @classmethod
+    def normalize_database_url(cls, value: object) -> object:
+        if not isinstance(value, str):
+            return value
+        if value.startswith("postgres://"):
+            value = "postgresql://" + value.removeprefix("postgres://")
+        if value.startswith("postgresql://"):
+            value = "postgresql+psycopg://" + value.removeprefix("postgresql://")
+        return value
+
+    @model_validator(mode="after")
+    def require_deployed_secret(self) -> "Settings":
+        local_database = "@db:" in self.database_url or "@db/" in self.database_url
+        if self.jwt_secret == LOCAL_JWT_SECRET and not local_database:
+            raise ValueError("Set JWT_SECRET to a unique value before deploying.")
+        return self
 
 
 @lru_cache
