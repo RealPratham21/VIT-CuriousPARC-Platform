@@ -37,10 +37,12 @@ import {
   formatEventTime,
   getStaffTeam,
   getTeam,
+  compareTracks,
   listRooms,
   listTeams,
   listTracks,
   registerTeam,
+  trackLabel,
 } from "@/lib/teams"
 
 export function TeamsDirectory() {
@@ -434,8 +436,9 @@ function RegisterTeamDialog({
     listTracks()
       .then((result) => {
         if (!active) return
-        setTracks(result)
-        setTrackId((current) => current || result[0]?.id || "")
+        const ordered = [...result].sort(compareTracks)
+        setTracks(ordered)
+        setTrackId((current) => current || ordered[0]?.id || "")
       })
       .catch((caught: unknown) => {
         if (active) setTrackError(caught instanceof Error ? caught.message : "Could not load tracks.")
@@ -572,7 +575,7 @@ function RegisterTeamDialog({
               {tracks.length === 0 ? <option value="">No tracks available</option> : null}
               {tracks.map((track) => (
                 <option key={track.id} value={track.id}>
-                  {track.name}
+                  {trackLabel(track)}
                 </option>
               ))}
             </select>
