@@ -1,0 +1,5 @@
+Alembic migration environment for HackOps.
+
+Domain migrations begin in P2 after the operational contract has been mapped
+to SQLAlchemy models.
+
